@@ -10,6 +10,7 @@ This document describes the testing strategy for the Todo API and lists all cove
 |------|----------|-------------|---------|
 | **Unit tests** | `internal/`, `pkg/` (files named `*_test.go`) | `go test ./...` | Test handlers, services, middleware, and utils in isolation using mocks. No database required. |
 | **Integration tests** | `tests/integration/` | `go test -v -tags=integration ./tests/integration/...` | Test full HTTP → DB flow against a real MySQL instance. Require `DB_*` and `JWT_SECRET` in env. |
+| **Load tests** | `loadtest/k6/` | `k6 run loadtest/k6/<test>.js` | Stress test API endpoints using k6. Requires running server and k6 installed. |
 
 Integration tests use the build tag `integration`, so they are **excluded** from `go test ./...` unless you pass `-tags=integration`.
 
@@ -174,9 +175,77 @@ Integration tests live in `tests/integration/` and use a real MySQL database. Th
 
 ---
 
+## Load Tests (k6)
+
+Load tests use [k6](https://k6.io/) to stress test the API under various traffic conditions. They live in `loadtest/k6/` and require a running server instance.
+
+### Prerequisites
+
+```bash
+# Install k6 (macOS)
+brew install k6
+
+# Install k6 (Linux - Debian/Ubuntu)
+sudo gpg -k
+sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+sudo apt-get update && sudo apt-get install k6
+```
+
+### Running Load Tests
+
+```bash
+# Start the server first (use a dedicated load test database)
+go run ./cmd/server
+
+# Quick sanity check (30s, 5 VUs)
+k6 run loadtest/k6/quick-test.js
+
+# Full CRUD test
+k6 run loadtest/k6/todo-test.js
+
+# Comprehensive suite (smoke → load → stress)
+k6 run loadtest/k6/full-test.js
+
+# Custom base URL
+k6 run -e BASE_URL=http://localhost:3000 loadtest/k6/quick-test.js
+```
+
+### Available Test Files
+
+| Test file | Description | Duration | VUs |
+|-----------|-------------|----------|-----|
+| `quick-test.js` | Sanity check – basic endpoint availability | 30s | 5 |
+| `auth-test.js` | Register and login flows | varies | varies |
+| `todo-test.js` | Full CRUD operations on todos | varies | varies |
+| `full-test.js` | Complete suite: smoke → load → stress stages | longer | ramping |
+| `spike-test.js` | Simulates sudden traffic bursts | varies | spikes |
+
+### Interpreting Results
+
+k6 outputs metrics including:
+- **http_req_duration**: Response time (p95, p99, avg)
+- **http_reqs**: Total requests and requests/second
+- **http_req_failed**: Percentage of failed requests
+- **iterations**: Completed test iterations
+
+A healthy API should show:
+- `http_req_failed` < 1%
+- `http_req_duration (p95)` < 500ms under normal load
+
+### Best Practices
+
+1. **Use a dedicated database** (e.g., `todo_loadtest`) – not production or test DB
+2. **Run against a local or staging server** – avoid load testing production without coordination
+3. **Start with `quick-test.js`** to verify setup before running heavier tests
+4. **Monitor server resources** (CPU, memory, DB connections) during tests
+
+---
+
 ## Summary
 
 - **Unit tests:** Handlers (auth, todo), services (auth, todo, category), middleware (auth, request ID), and utils (JWT, password). All use mocks; no DB.
 - **Integration tests:** Health, auth (register/login, duplicate email, wrong password, protected route), todo CRUD, and category share (share/get/update/unshare, cannot share with self, share already exists). All use real MySQL and full HTTP stack.
+- **Load tests:** k6-based performance tests including quick sanity checks, auth flows, todo CRUD, full suite (smoke/load/stress), and spike tests. Require running server and k6 installed.
 
 For integration test DB setup and optional `SKIP_TRUNCATE`, see **CLAUDE.md** (Integration tests section).
