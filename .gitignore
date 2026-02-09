@@ -26,3 +26,6 @@
 # OS specific files
 DS_Store
 Thumbs.db
+
+# Claude Code local settings (not tracked)
+.claude/settings.local.json

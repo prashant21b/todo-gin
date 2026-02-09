@@ -1,0 +1,55 @@
+DROP TABLE IF EXISTS todos;
+DROP TABLE IF EXISTS category_shares;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS users;
+
+CREATE TABLE users (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE categories (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  owner_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_categories_owner_id (owner_id),
+  UNIQUE KEY unique_user_category (owner_id, name)
+);
+
+CREATE TABLE category_shares (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  category_id BIGINT UNSIGNED NOT NULL,
+  shared_with_user_id BIGINT UNSIGNED NOT NULL,
+  permission ENUM('read', 'write') NOT NULL DEFAULT 'read',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+  FOREIGN KEY (shared_with_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_category_share (category_id, shared_with_user_id),
+  INDEX idx_category_shares_user (shared_with_user_id)
+);
+
+CREATE TABLE todos (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  category_id BIGINT UNSIGNED NOT NULL,
+  completed BOOLEAN NOT NULL DEFAULT FALSE,
+  user_id BIGINT UNSIGNED NOT NULL,
+  created_by BIGINT UNSIGNED NOT NULL,
+  deleted_at DATETIME NULL DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+  INDEX idx_todos_user_id (user_id),
+  INDEX idx_todos_category_id (category_id),
+  INDEX idx_todos_deleted_at (deleted_at)
+);
